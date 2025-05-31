@@ -66,42 +66,48 @@ public class PlayerBehaviour : MonoBehaviour
         minSwipeDistancePixels = minSwipeDistance * Screen.dpi;
     }
 
+    /// <summary>
+    /// FixedUpdate is a prime place to put physics
+    /// calculations happening over a period of time.
+    /// </summary>
     void FixedUpdate()
-{
-    // Default horizontal input
-    float horizontalSpeed = Input.GetAxis("Horizontal") * dodgeSpeed;
+    {
+        /* If the game is paused, don't do anything */
+        if (PauseScreenBehaviour.paused)
+        {
+            return;
+        }
+
+        // Default horizontal input
+        float horizontalSpeed = Input.GetAxis("Horizontal") * dodgeSpeed;
 
 #if UNITY_STANDALONE || UNITY_EDITOR
-    if (Input.GetMouseButton(0))
-    {
-        Vector3 screenPos = Input.mousePosition;
-        horizontalSpeed = CalculateMovement(screenPos);
-    }
+        if (Input.GetMouseButton(0))
+        {
+            Vector3 screenPos = Input.mousePosition;
+            horizontalSpeed = CalculateMovement(screenPos);
+        }
 
 #elif UNITY_IOS || UNITY_ANDROID
-    switch (horizMovement)
-    {
-        case MobileHorizMovement.Accelerometer:
-            // Move player based on accelerometer direction
-            horizontalSpeed = Input.acceleration.x * dodgeSpeed;
-            break;
+        switch (horizMovement)
+        {
+            case MobileHorizMovement.Accelerometer:
+                horizontalSpeed = Input.acceleration.x * dodgeSpeed;
+                break;
 
-        case MobileHorizMovement.ScreenTouch:
-            // Check if Input has registered more than zero touches
-            if (Input.touchCount > 0)
-            {
-                // Store the first touch detected
-                Touch firstTouch = Input.touches[0];
-                Vector3 screenPos = firstTouch.position;
-                horizontalSpeed = CalculateMovement(screenPos);
-            }
-            break;
-    }
+            case MobileHorizMovement.ScreenTouch:
+                if (Input.touchCount > 0)
+                {
+                    Touch firstTouch = Input.touches[0];
+                    Vector3 screenPos = firstTouch.position;
+                    horizontalSpeed = CalculateMovement(screenPos);
+                }
+                break;
+        }
 #endif
 
-    rb.AddForce(horizontalSpeed, 0, rollSpeed);
-}
-
+        rb.AddForce(horizontalSpeed, 0, rollSpeed);
+    }
 
     private float CalculateMovement(Vector3 screenPos)
     {
@@ -111,38 +117,41 @@ public class PlayerBehaviour : MonoBehaviour
         return xMove * dodgeSpeed;
     }
 
-   /// <summary>
-/// Update is called once per frame
-/// </summary>
-private void Update()
-{
-    /* Check if we are running either in the Unity
-       editor or in a
-     * standalone build.*/
-    #if UNITY_STANDALONE || UNITY_WEBPLAYER || UNITY_EDITOR
-    /* If the mouse is tapped */
-    if (Input.GetMouseButtonDown(0))
-    {
-        Vector2 screenPos = new Vector2(
-            Input.mousePosition.x,
-                Input.mousePosition.y);
-        TouchObjects(screenPos);
-    }
-    /* Check if we are running on a mobile device */
-    #elif UNITY_IOS || UNITY_ANDROID
-        /* Check if Input has registered more than
-           zero touches */
-        if (Input.touchCount > 0)
-        {
-            /* Store the first touch detected */
-            Touch touch = Input.touches[0];
-            TouchObjects(touch.position);
-            SwipeTeleport(touch);
-            ScalePlayer();
-        }
-    #endif
-}
-    
+    /// <summary>
+    /// Update is called once per frame
+    /// </summary>
+    private void Update()
+    {
+        /* Using Keyboard/Controller to toggle pause menu */
+        if (Input.GetButtonDown("Cancel"))
+        {
+            var pauseBehaviour = GameObject.FindObjectOfType<PauseScreenBehaviour>();
+            pauseBehaviour.SetPauseMenu(!PauseScreenBehaviour.paused);
+        }
+
+        /* If the game is paused, don't do anything */
+        if (PauseScreenBehaviour.paused)
+        {
+            return;
+        }
+
+#if UNITY_STANDALONE || UNITY_WEBPLAYER || UNITY_EDITOR
+        if (Input.GetMouseButtonDown(0))
+        {
+            Vector2 screenPos = new Vector2(Input.mousePosition.x, Input.mousePosition.y);
+            TouchObjects(screenPos);
+        }
+
+#elif UNITY_IOS || UNITY_ANDROID
+        if (Input.touchCount > 0)
+        {
+            Touch touch = Input.touches[0];
+            TouchObjects(touch.position);
+            SwipeTeleport(touch);
+            ScalePlayer();
+        }
+#endif
+    }
 
     private void SwipeTeleport(Touch touch)
     {
@@ -203,48 +212,29 @@ private void Update()
         currentScale = newScale;
     }
 
-    /// <summary>
-/// Will determine if we are touching a game object
-/// and if so call events for it
-/// </summary>
-/// <param name="screenPos">The position of the touch in screen space</param>
-private static void TouchObjects(Vector2 screenPos)
-{
-    // Convert the position into a ray
-    Ray touchRay = Camera.main.ScreenPointToRay(screenPos);
-    RaycastHit hit;
-
-    // Create a LayerMask that will collide with all possible channels
-    int layerMask = ~0;
-
-    // Are we touching an object with a collider?
-    if (Physics.Raycast(touchRay, out hit, Mathf.Infinity, layerMask, QueryTriggerInteraction.Ignore))
+    private static void TouchObjects(Vector2 screenPos)
     {
-        // Call the PlayerTouch function if it exists on a component attached to this object
-        hit.transform.SendMessage("PlayerTouch", SendMessageOptions.DontRequireReceiver);
+        Ray touchRay = Camera.main.ScreenPointToRay(screenPos);
+        RaycastHit hit;
+
+        int layerMask = ~0;
+
+        if (Physics.Raycast(touchRay, out hit, Mathf.Infinity, layerMask, QueryTriggerInteraction.Ignore))
+        {
+            hit.transform.SendMessage("PlayerTouch", SendMessageOptions.DontRequireReceiver);
+        }
     }
-}
 
-/// <summary>
-/// Overload: Will determine if we are touching a game object
-/// using a Touch input and if so call events for it
-/// </summary>
-/// <param name="touch">Our touch event</param>
-private static void TouchObjects(Touch touch)
-{
-    // Convert the position into a ray
-    Ray touchRay = Camera.main.ScreenPointToRay(touch.position);
-    RaycastHit hit;
-
-    // Create a LayerMask that will collide with all possible channels
-    int layerMask = ~0;
-
-    // Are we touching an object with a collider?
-    if (Physics.Raycast(touchRay, out hit, Mathf.Infinity, layerMask, QueryTriggerInteraction.Ignore))
+    private static void TouchObjects(Touch touch)
     {
-        // Call the PlayerTouch function if it exists on a component attached to this object
-        hit.transform.SendMessage("PlayerTouch", SendMessageOptions.DontRequireReceiver);
-    }
-}
+        Ray touchRay = Camera.main.ScreenPointToRay(touch.position);
+        RaycastHit hit;
 
+        int layerMask = ~0;
+
+        if (Physics.Raycast(touchRay, out hit, Mathf.Infinity, layerMask, QueryTriggerInteraction.Ignore))
+        {
+            hit.transform.SendMessage("PlayerTouch", SendMessageOptions.DontRequireReceiver);
+        }
+    }
 }
