@@ -59,16 +59,28 @@ public class PlayerBehaviour : MonoBehaviour
     [Tooltip("The maximum size (in Unity units) that the player should be")]
     public float maxScale = 3.0f;
 
+    /// <summary>
+    /// Reference to the MobileJoystick, if any
+    /// </summary>
+    private MobileJoystick joystick;
+
     // Start is called before the first frame update
     public void Start()
     {
+        // Get access to our Rigidbody component
         rb = GetComponent<Rigidbody>();
+
+        // Convert swipe distance in inches to pixels
         minSwipeDistancePixels = minSwipeDistance * Screen.dpi;
+
+        // Find the MobileJoystick instance in the scene (if any)
+        joystick = GameObject.FindObjectOfType<MobileJoystick>();
     }
 
     /// <summary>
     /// FixedUpdate is a prime place to put physics
-    /// calculations happening over a period of time.
+    /// calculations
+    /// happening over a period of time.
     /// </summary>
     void FixedUpdate()
     {
@@ -78,28 +90,48 @@ public class PlayerBehaviour : MonoBehaviour
             return;
         }
 
-        // Default horizontal input
-        float horizontalSpeed = Input.GetAxis("Horizontal") * dodgeSpeed;
+        // Check if we're moving to the side
+        var horizontalSpeed = Input.GetAxis("Horizontal") * dodgeSpeed;
 
-#if UNITY_STANDALONE || UNITY_EDITOR
-        if (Input.GetMouseButton(0))
+        /* If the joystick is active and the player is
+           moving the joystick, override the value */
+        if (joystick && joystick.axisValue.x != 0)
         {
-            Vector3 screenPos = Input.mousePosition;
-            horizontalSpeed = CalculateMovement(screenPos);
+            horizontalSpeed = joystick.axisValue.x * dodgeSpeed;
         }
 
+        /* Check if we are running either in the Unity
+           editor or in a standalone build.*/
+#if UNITY_STANDALONE || UNITY_WEBPLAYER || UNITY_EDITOR
+        /* If the mouse is held down (or the screen is
+           tapped on Mobile */
+        if (Input.GetMouseButton(0))
+        {
+            if (!joystick)
+            {
+                var screenPos = Input.mousePosition;
+                horizontalSpeed = CalculateMovement(screenPos);
+            }
+        }
+
+    /* Check if we are running on a mobile device */
 #elif UNITY_IOS || UNITY_ANDROID
         switch (horizMovement)
         {
             case MobileHorizMovement.Accelerometer:
+                /* Move player based on accelerometer
+                   direction */
                 horizontalSpeed = Input.acceleration.x * dodgeSpeed;
                 break;
 
             case MobileHorizMovement.ScreenTouch:
-                if (Input.touchCount > 0)
+                /* Check if Input registered more than
+                   zero touches */
+                if (!joystick && Input.touchCount > 0)
                 {
-                    Touch firstTouch = Input.touches[0];
-                    Vector3 screenPos = firstTouch.position;
+                    /* Store the first touch detected */
+                    var firstTouch = Input.touches[0];
+                    var screenPos = firstTouch.position;
                     horizontalSpeed = CalculateMovement(screenPos);
                 }
                 break;
