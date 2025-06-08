@@ -1,4 +1,5 @@
 using UnityEngine;
+using TMPro; //TextMeshProUGUI
 
 /// <summary>
 /// Responsible for moving the player automatically and receiving input.
@@ -18,9 +19,6 @@ public class PlayerBehaviour : MonoBehaviour
     [Range(0, 10)]
     public float rollSpeed = 5;
 
-    /// <summary>
-    /// Movement types for horizontal mobile control
-    /// </summary>
     public enum MobileHorizMovement
     {
         Accelerometer,
@@ -37,19 +35,8 @@ public class PlayerBehaviour : MonoBehaviour
     [Tooltip("How far must the player swipe before we will execute the action (in inches)")]
     public float minSwipeDistance = 0.25f;
 
-    /// <summary>
-    /// Used to hold the value that converts minSwipeDistance to pixels
-    /// </summary>
     private float minSwipeDistancePixels;
-
-    /// <summary>
-    /// Stores the starting position of mobile touch events
-    /// </summary>
     private Vector2 touchStart;
-
-    /// <summary>
-    /// The current scale of the player
-    /// </summary>
     private float currentScale = 1;
 
     [Header("Scaling Properties")]
@@ -59,52 +46,72 @@ public class PlayerBehaviour : MonoBehaviour
     [Tooltip("The maximum size (in Unity units) that the player should be")]
     public float maxScale = 3.0f;
 
-    /// <summary>
-    /// Reference to the MobileJoystick, if any
-    /// </summary>
     private MobileJoystick joystick;
+
+    [Header("Object References")]
+    public TextMeshProUGUI scoreText;
+
+    private float score = 0;
+
+    public float Score
+    {
+        get
+        {
+            return score;
+        }
+        set
+        {
+            score = value;
+            /* Check if scoreText has been assigned */
+            if (scoreText == null)
+            {
+                Debug.LogError("Score Text is not set. " +
+                "Please go to the Inspector and assign it");
+                /* If not assigned, don't try to update it. */
+                return;
+            }
+            /* Update the text to display the whole number portion of the score */
+            int cleanScore = (int)score;
+            scoreText.text = cleanScore.ToString();
+
+            // finally, SAVE the highscore if its higher than we have saved
+            if (cleanScore > PlayerPrefs.GetInt("score"))
+            {
+                PlayerPrefs.SetInt("score", cleanScore);
+            }
+        }
+    }
 
     // Start is called before the first frame update
     public void Start()
     {
         // Get access to our Rigidbody component
         rb = GetComponent<Rigidbody>();
-
-        // Convert swipe distance in inches to pixels
         minSwipeDistancePixels = minSwipeDistance * Screen.dpi;
-
-        // Find the MobileJoystick instance in the scene (if any)
         joystick = GameObject.FindObjectOfType<MobileJoystick>();
+        Score = 0;
     }
 
     /// <summary>
-    /// FixedUpdate is a prime place to put physics
-    /// calculations
-    /// happening over a period of time.
+    /// FixedUpdate is a prime place to put physics calculations happening over a period of time.
     /// </summary>
     void FixedUpdate()
     {
-        /* If the game is paused, don't do anything */
         if (PauseScreenBehaviour.paused)
         {
             return;
         }
 
-        // Check if we're moving to the side
+        Score += Time.deltaTime;
+
         var horizontalSpeed = Input.GetAxis("Horizontal") * dodgeSpeed;
 
-        /* If the joystick is active and the player is
-           moving the joystick, override the value */
         if (joystick && joystick.axisValue.x != 0)
         {
             horizontalSpeed = joystick.axisValue.x * dodgeSpeed;
         }
 
-        /* Check if we are running either in the Unity
-           editor or in a standalone build.*/
 #if UNITY_STANDALONE || UNITY_WEBPLAYER || UNITY_EDITOR
-        /* If the mouse is held down (or the screen is
-           tapped on Mobile */
         if (Input.GetMouseButton(0))
         {
             if (!joystick)
@@ -113,23 +120,15 @@ public class PlayerBehaviour : MonoBehaviour
                 horizontalSpeed = CalculateMovement(screenPos);
             }
         }
-
-    /* Check if we are running on a mobile device */
 #elif UNITY_IOS || UNITY_ANDROID
         switch (horizMovement)
         {
             case MobileHorizMovement.Accelerometer:
-                /* Move player based on accelerometer
-                   direction */
                 horizontalSpeed = Input.acceleration.x * dodgeSpeed;
                 break;
-
             case MobileHorizMovement.ScreenTouch:
-                /* Check if Input registered more than
-                   zero touches */
                 if (!joystick && Input.touchCount > 0)
                 {
-                    /* Store the first touch detected */
                     var firstTouch = Input.touches[0];
                     var screenPos = firstTouch.position;
                     horizontalSpeed = CalculateMovement(screenPos);
@@ -149,19 +148,14 @@ public class PlayerBehaviour : MonoBehaviour
         return xMove * dodgeSpeed;
     }
 
-    /// <summary>
-    /// Update is called once per frame
-    /// </summary>
     private void Update()
     {
-        /* Using Keyboard/Controller to toggle pause menu */
         if (Input.GetButtonDown("Cancel"))
         {
             var pauseBehaviour = GameObject.FindObjectOfType<PauseScreenBehaviour>();
             pauseBehaviour.SetPauseMenu(!PauseScreenBehaviour.paused);
         }
 
-        /* If the game is paused, don't do anything */
         if (PauseScreenBehaviour.paused)
         {
             return;
@@ -173,7 +167,6 @@ public class PlayerBehaviour : MonoBehaviour
             Vector2 screenPos = new Vector2(Input.mousePosition.x, Input.mousePosition.y);
             TouchObjects(screenPos);
         }
-
 #elif UNITY_IOS || UNITY_ANDROID
         if (Input.touchCount > 0)
         {
